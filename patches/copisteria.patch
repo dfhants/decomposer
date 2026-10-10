@@ -1,0 +1,186 @@
+diff --git a/src/copisteria/front.py b/src/copisteria/front.py
+index ea9f85d..d5418eb 100644
+--- a/src/copisteria/front.py
++++ b/src/copisteria/front.py
+@@ -433,6 +433,32 @@ def _ink_run(mask, x: float, y0: float, y1: float, reach: int = 2) -> float:
+     return float(mask[a:b, xa:xb].any(axis=1).mean())
+ 
+ 
++_GRAY = None                  # the page's grey levels, for what the ink mask is too coarse to show
++FAINT = 0.12                  # a faint line is this far from the paper toward the ink, at least
++
++
++def _faint_line(x_lo: int, x_hi: int, y0: float, y1: float, sp: float) -> float:
++    """Share of the gap between two staves that a faint vertical line crosses at their left end. On a small render
++    the line that opens a system is one anti-aliased pixel wide and far paler than the ink mask's threshold, so a
++    choir and its piano read as two systems. The line counts only with paper to its left: a grey patch over the
++    gap (a stamp, a watermark) is not a line."""
++    import numpy as np
++    g = _GRAY
++    H, W = g.shape
++    ya, yb = max(0, int(round(y0))), min(H, int(round(y1)))
++    if yb - ya < 2:
++        return 0.0
++    paper, ink = np.percentile(g, 50), np.percentile(g, 1)
++    pale = g[ya:yb] < paper - FAINT * max(1.0, paper - ink)
++    away = max(3, int(round(sp)))
++    best = 0.0
++    for x in range(max(away + 1, x_lo), min(W - 1, x_hi) + 1):
++        run = float(pale[:, x - 1:x + 2].any(axis=1).mean())
++        if run > best and float(pale[:, x - away - 1:x - away + 1].any(axis=1).mean()) < 0.5:
++            best = run
++    return best
++
++
+ def _ink_links(gray, syms: list[Sym], a: Staff, b: Staff, page_left: float) -> tuple[float, float]:
+     """(left, bars): how much of the gap between two staves a vertical ink run crosses at their left end (the
+     system's opening line, brace or bracket -- the measure boxes start after the clef, so from the page's leftmost
+@@ -441,6 +467,8 @@ def _ink_links(gray, syms: list[Sym], a: Staff, b: Staff, page_left: float) -> t
+     y0, y1 = a.y1 + 1, b.y0 - 1
+     lo, hi = int(min(page_left, a.x0, b.x0) - 3 * sp), int(min(a.x0, b.x0) + sp)
+     left = max((_ink_run(gray, x, y0, y1) for x in range(max(0, lo), hi + 1, 2)), default=0.0)
++    if left < INK_LINK and _GRAY is not None:
++        left = max(left, _faint_line(lo, hi, y0, y1, sp))
+     lines = [s for s in syms if s.fam == "barLine" and s.p >= 0.5 and s.staff < 0 and
+              a.y0 - sp <= s.cy <= a.y1 + sp and max(a.x0, b.x0) <= s.cx <= min(a.x1, b.x1)]
+     bars = (sum(_ink_run(gray, s.cx, y0, y1) >= INK_LINK for s in lines) / len(lines)) if lines else 0.0
+@@ -465,6 +493,7 @@ def _systems(syms: list[Sym], staves: list[Staff], gray=None, ink: bool = False)
+         # the ink decides where it is clear: a line through the gap joins, a white gap separates; a brace or
+         # bracket the detector saw over both staves joins them whatever the ink
+         page_left = min(st.x0 for st in staves)
++        open_ = set()                             # the pairs the ink leaves open: neither joined nor white
+         for k in range(1, len(staves)):
+             left, bars = _ink_links(gray, syms, staves[k - 1], staves[k], page_left)
+             if left >= INK_LINK or bars >= 0.5:
+@@ -473,6 +502,28 @@ def _systems(syms: list[Sym], staves: list[Staff], gray=None, ink: bool = False)
+                 decided[k - 1] = False            # white between them: a brace box claiming otherwise is wrong
+             elif _braced(syms, staves[k - 1], staves[k]):
+                 decided[k - 1] = True
++            else:
++                open_.add(k - 1)
++        # a page's systems are alike: where the ink leaves a split open and the two halves together are as large
++        # as the page's largest system (a choir and its piano with no line between them, beside systems that
++        # were read whole), they are one system
++        def sizes():
++            out, n = [], 1
++            for d in decided:
++                if d:
++                    n += 1
++                else:
++                    out.append(n)
++                    n = 1
++            return out + [n]
++        full = max(sizes())
++        if full > 1:
++            for k in sorted(open_):
++                if decided[k]:
++                    continue
++                sz, at = sizes(), sum(not d for d in decided[:k])
++                if sz[at] + sz[at + 1] == full and sz.count(full) >= 1:
++                    decided[k] = True
+     systems: list[System] = []
+     for k, st in enumerate(staves):
+         if k == 0:
+@@ -868,6 +919,8 @@ def build(dets: list[dict], width: float, height: float, image=None, cands: list
+     syms = merge(dets)
+     staves = _ink_staves(gray, syms) if gray is not None else None
+     mask = ink_mask(gray) if gray is not None else None
++    global _GRAY
++    _GRAY = gray
+     ink_path = bool(staves)
+     if staves:
+         systems = _systems(syms, staves, mask, ink=True)
+diff --git a/src/copisteria/write.py b/src/copisteria/write.py
+index 4eb0511..bba0f12 100644
+--- a/src/copisteria/write.py
++++ b/src/copisteria/write.py
+@@ -138,6 +138,43 @@ class PartPlan:
+     staves: list[int]                  # staff positions (within a system) of this part's staves
+ 
+ 
++def _at(sy, pos: int):
++    """The staff of ``sy`` at part position ``pos`` (a position of the fullest system), or None when the system
++    does not show it."""
++    i = pos - getattr(sy, "offset", 0)
++    return sy.staves[i] if 0 <= i < len(sy.staves) else None
++
++
++def _align_systems(rd: Reading, plans: list) -> None:
++    """Place every system that shows fewer staves than the fullest one against it. A choral score hides the choir
++    under a piano introduction and the piano under an a cappella passage: counted from the top, the piano's
++    staves would be written into the voices' parts. The braces decide: a system's braced pair sits where the
++    fullest system has one, and staves with no brace avoid its braced pairs. With nothing to tell, the top."""
++    L = rd.layout
++    K = max(len(sy.staves) for sy in L.systems)
++    braced = {pl.staves[0] for pl in plans if len(pl.staves) == 2}
++    braces = [s for si, s in enumerate(L.syms) if _real(rd, si) and _cls(rd, si) == "grpSym_brace"]
++    for sy in L.systems:
++        n = len(sy.staves)
++        own = set()
++        for s in braces:
++            cov = [i for i, k in enumerate(sy.staves)
++                   if s.box[1] - L.staves[k].sp <= L.staves[k].mid <= s.box[3] + L.staves[k].sp]
++            if len(cov) == 2 and cov[1] == cov[0] + 1:
++                own.add(cov[0])
++        best = (None, 0)
++        for off in range(K - n + 1):
++            score = 2 * sum(i + off in braced for i in own)
++            for p in braced:            # a braced pair of the fullest system shown without its brace, or cut in two
++                inside = (off <= p < off + n) + (off <= p + 1 < off + n)
++                score -= inside == 1 or (inside == 2 and p - off not in own)
++            if best[0] is None or score > best[0] or (score == best[0] and own):
++                best = (score, off)
++        sy.offset = best[1]
++        for i, k in enumerate(sy.staves):
++            L.staves[k].pos = i + sy.offset
++
++
+ def _plan_parts(rd: Reading) -> list[PartPlan]:
+     L = rd.layout
+     if not L.systems:
+@@ -623,9 +660,10 @@ def _next_system_first(L, notes_on, staff: int):
+     if st.system + 1 >= len(L.systems):
+         return None
+     nxt = L.systems[st.system + 1]
+-    if st.pos >= len(nxt.staves):
++    k = _at(nxt, st.pos)
++    if k is None:
+         return None
+-    evs = notes_on.get(nxt.staves[st.pos], [])
++    evs = notes_on.get(k, [])
+     return evs[0] if evs else None
+ 
+ 
+@@ -1018,7 +1056,7 @@ def _part_names(rd: Reading, plans: list, texts: list) -> list[str | None]:
+     S = np.full((len(plans), len(cands)), -1e9)
+     for n, pl in enumerate(plans):
+         for sy in L.systems:
+-            ks = [sy.staves[pos] for pos in pl.staves if pos < len(sy.staves)]
++            ks = [k for k in (_at(sy, pos) for pos in pl.staves) if k is not None]
+             st = [L.staves[k] for k in ks]
+             if not st:
+                 continue
+@@ -1048,6 +1086,8 @@ def write(rd: Reading, texts: list[dict] | None = None, title: str | None = None
+     """``image``: the page (PIL image or grey array), for what is read off the ink here (dashes after words)."""
+     L = rd.layout
+     plans = _plan_parts(rd)
++    if L.systems:
++        _align_systems(rd, plans)
+     root = ET.Element("score-partwise", version="4.0")
+     texts = texts or []
+     t_title = title or next((t["text"] for t in texts if t.get("role") == "pgHead_title"), None)
+@@ -1096,11 +1136,11 @@ def write(rd: Reading, texts: list[dict] | None = None, title: str | None = None
+                 sy = L.systems[s_i]
+                 m = {"staves": [], "time": None, "key": None}
+                 for k_i, pos in enumerate(pl.staves):
+-                    if pos >= len(sy.staves):
++                    staff = _at(sy, pos)
++                    if staff is None:
+                         m["staves"].append(None)
+                         continue
+-                    staff = sy.staves[pos]
+-                    cols = sy.columns[pos]
++                    cols = sy.columns[pos - sy.offset]
+                     bars = [j for j, cc in enumerate(cols) if cc == c]
+                     if not bars:
+                         m["staves"].append(None)

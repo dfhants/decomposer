@@ -1,0 +1,16 @@
+{
+  "name": "decomposer",
+  "displayName": "Decomposer",
+  "version": "0.2.0",
+  "description": "Turn sheet music PDFs, scans and screenshots into editable MusicXML and MuseScore files, on your own machine",
+  "author": {
+    "name": "Duncan H"
+  },
+  "keywords": [
+    "music",
+    "omr",
+    "musicxml",
+    "musescore",
+    "sheet-music"
+  ]
+}

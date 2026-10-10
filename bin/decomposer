@@ -1,0 +1,48 @@
+#!/bin/sh
+# decomposer: sheet music PDFs and scans to MusicXML. This wrapper finds the model's home, sets it up when it is
+# missing or out of date, and hands over to the Python CLI.
+#
+# The model, its Python environment and the copista reader live outside the plugin, in DECOMPOSER_HOME, so that a
+# plugin update does not download them again.
+set -e
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HOME_DIR="${DECOMPOSER_HOME:-$HOME/Library/Application Support/decomposer}"
+STAMP="$HOME_DIR/.setup"
+# what the installed model must match: the setup script, the Python requirements and the patches to the reader
+BUILD="$(cat "$ROOT/scripts/setup.sh" "$ROOT/core/requirements.txt" "$ROOT"/patches/*.patch | shasum | cut -c1-12)"
+
+missing() {
+    for tool in uv git pdftoppm; do
+        command -v "$tool" >/dev/null 2>&1 || printf '%s ' "$tool"
+    done
+}
+
+case "${1:-}" in
+status)
+    need="$(missing)"
+    if [ "$(cat "$STAMP" 2>/dev/null)" = "$BUILD" ]; then
+        echo "ready"
+    elif [ -f "$STAMP" ]; then
+        echo "needs update: the next command updates the reader first (about a minute, no large download)"
+    else
+        echo "not set up: the first command sets up first (a few minutes; downloads about 125 MB of model weights and a Python environment of about 1 GB into $HOME_DIR)"
+    fi
+    [ -z "$need" ] || echo "missing tools: $need(on macOS: brew install uv git poppler; pdftoppm comes with poppler)"
+    [ -d "/Applications/MuseScore 4.app" ] || echo "MuseScore 4 is not installed: only MusicXML is written, no .mscz, and 'render' is unavailable"
+    exit 0
+    ;;
+esac
+
+if [ "$(cat "$STAMP" 2>/dev/null)" != "$BUILD" ]; then
+    need="$(missing)"
+    if [ -n "$need" ]; then
+        echo "decomposer: cannot set up, missing tools: $need(on macOS: brew install uv git poppler)" >&2
+        exit 2
+    fi
+    sh "$ROOT/scripts/setup.sh" "$ROOT" "$HOME_DIR" >&2
+    echo "$BUILD" > "$STAMP"
+fi
+[ "${1:-}" = "setup" ] && { echo "ready"; exit 0; }
+
+DECOMPOSER_HOME="$HOME_DIR" DECOMPOSER_BUILD="$BUILD" PYTHONPATH="$ROOT/core" \
+    exec "$HOME_DIR/venv/bin/python" -m decomposer.cli "$@"

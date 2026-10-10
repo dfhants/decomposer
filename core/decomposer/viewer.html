@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>scorescan pages</title>
+<style>
+  body { margin: 0; font: 13px system-ui, sans-serif; display: flex; flex-direction: column; height: 100vh; }
+  nav { padding: 6px 10px; border-bottom: 1px solid #ddd; display: flex; gap: 6px; align-items: center; }
+  button { font: inherit; padding: 3px 10px; border: 1px solid #bbb; border-radius: 4px; background: #fff; cursor: pointer; }
+  button.on { background: #222; color: #fff; border-color: #222; }
+  iframe { flex: 1; border: 0; }
+</style>
+</head>
+<body>
+<nav id="nav">Page</nav>
+<iframe id="page"></iframe>
+<script src="pages.js"></script>
+<script>
+  // copisteria's own viewer for each page (scan with symbols, engraved reading), one tab per page
+  const nav = document.getElementById("nav"), frame = document.getElementById("page");
+  function show(i) {
+    frame.src = PAGES[i];
+    nav.querySelectorAll("button").forEach((b, n) => b.classList.toggle("on", n === i));
+  }
+  PAGES.forEach((_, i) => {
+    const b = document.createElement("button");
+    b.textContent = i + 1;
+    b.onclick = () => show(i);
+    nav.appendChild(b);
+  });
+  show(0);
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "name": "decomposer",
+  "owner": { "name": "Duncan H" },
+  "metadata": { "description": "Sheet music to MusicXML with the copista OMR model" },
+  "plugins": [
+    {
+      "name": "decomposer",
+      "source": "./",
+      "description": "Turn sheet music PDFs, scans and screenshots into editable MusicXML and MuseScore files, on your own machine"
+    }
+  ]
+}
