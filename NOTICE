@@ -1,0 +1,22 @@
+decomposer
+Copyright 2026 Duncan H
+
+This product uses, and its patches/ folder contains modifications to,
+copisteria:
+
+    copisteria
+    Copyright 2026 KobiMusic
+
+    This product includes software developed by KobiMusic (https://kobi.music):
+    copisteria, https://github.com/kobimusic/copisteria
+
+copisteria itself is not distributed in this repository. It is fetched from
+the repository above at a pinned commit when decomposer is first run, and
+patches/copisteria.patch is applied to that copy. The patch changes
+src/copisteria/front.py and src/copisteria/write.py: how staves are grouped
+into systems, and how a system that shows fewer staves is matched to the
+score's parts.
+
+The copista model weights are downloaded from
+https://huggingface.co/kobimusic/copista-28m and are under their own licence;
+see the model card there.

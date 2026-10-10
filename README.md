@@ -41,3 +41,8 @@ PYTHONPATH=core uv run --no-project --python 3.12 --with pytest pytest core/test
 
 Changing `patches/`, `scripts/setup.sh` or `core/requirements.txt` makes the next run update the model's home and
 re-read cached pages.
+
+## Licence and credits
+
+Apache-2.0. The recognition is done entirely by [copisteria](https://github.com/kobimusic/copisteria) and the
+copista model, by KobiMusic. Neither is included here: both are downloaded on first run. See `NOTICE`.
