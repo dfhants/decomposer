@@ -12,6 +12,19 @@ claude plugin install decomposer@decomposer
 
 Then ask Claude to convert a score, or run `/decomposer:decompose <files or folder>`.
 
+## Use it from chat in the Claude desktop app
+
+Build the desktop extension and open it; the app asks to install it.
+
+```
+python3 desktop/build.py        # writes dist/decomposer.mcpb; needs npx
+open dist/decomposer.mcpb
+```
+
+Then give Claude the path of a score in any chat. The extension is an MCP server (`desktop/server.py`) that
+drives the same `decomposer` command and hands the contact sheet and page pictures back to Claude. It works on
+paths on your Mac: a file dragged into the chat is not on disk. It does not work in a browser or on a phone.
+
 ## Use it from a terminal
 
 ```

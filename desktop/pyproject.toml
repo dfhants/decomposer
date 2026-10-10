@@ -1,0 +1,6 @@
+[project]
+name = "decomposer-mcp"
+version = "0.3.0"
+description = "decomposer's MCP server: a thin front to the decomposer command"
+requires-python = ">=3.10"
+dependencies = ["mcp>=1.2,<2", "pillow"]
