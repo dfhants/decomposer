@@ -40,11 +40,13 @@ Work in this order.
    is all there is. Note the title, composer and the names printed beside the staves: use only what is printed.
 3. `convert`. If it answers that it has read only some of the pages, call it again with the same arguments
    until it finishes. Read its warnings and the bars per page: a page with about twice the bars of its
-   neighbours has had a system split in two.
+   neighbours has had a system split in two. Chord symbols printed above the staves are read too; a page
+   that shows them but reports none has had a line missed.
 4. Check before calling the result good: `source_pages` and `render` for the same page numbers, compared bar
    by bar. Check the first page, one from the middle, and any page a warning named.
-5. Tell the user where the files are, which pages you compared and what you found, and that lyrics, chord
-   symbols and fingering are not transcribed. Handwritten music mostly does not work.
+5. Tell the user where the files are, which pages you compared and what you found (notes, and chord symbols
+   where the source has them), and that lyrics and fingering are not transcribed. Handwritten music mostly
+   does not work.
 """)
 
 
@@ -148,7 +150,8 @@ async def inspect(files: list[str], split_spreads: bool = True) -> list:
 
 @mcp.tool()
 async def convert(files: list[str], ctx: Context, title: str = "", composer: str = "", parts: list[str] = [],
-                  out_folder: str = "", file_name: str = "", split_spreads: bool = True) -> str:
+                  out_folder: str = "", file_name: str = "", split_spreads: bool = True,
+                  chord_symbols: bool = True) -> str:
     """Read the pages and write one score: a .musicxml file, and a MuseScore .mscz file when MuseScore 4 is
     installed. About 6 seconds a page. A long score is read over several calls: when the answer says only some
     pages have been read, call again with the same arguments. Pages already read are kept.
@@ -158,7 +161,8 @@ async def convert(files: list[str], ctx: Context, title: str = "", composer: str
     parts: part names from the top staff down, as printed; a piano's two staves are one part. Leave empty if
       the staves are not labelled.
     out_folder: where to write the result (default: beside the first file).
-    file_name: name of the result without extension (default: the title, else the first file's name)."""
+    file_name: name of the result without extension (default: the title, else the first file's name).
+    chord_symbols: read the chord symbols printed above the staves ("Dm7", "G/B") into the score."""
     files = paths(files)
     if isinstance(files, str):
         return files
@@ -171,19 +175,22 @@ async def convert(files: list[str], ctx: Context, title: str = "", composer: str
             args += [flag, value]
     if not split_spreads:
         args.append("--no-split")
+    if not chord_symbols:
+        args.append("--no-chords")
     r = await command(ctx, *args)
     if "error" in r:
         return r["error"]
     if r.get("partial"):
         return f"Read {r['read']} of {r['of']} pages so far. Call convert again with the same arguments to go on."
     lines = [f"page {p['page']}: {p['source']}: {p['systems']} systems, {p['bars']} bars, {p['parts']} parts"
-             for p in r["pages"]]
+             + (f", {p['chords']} chord symbols" if p.get("chords") else "") for p in r["pages"]]
     lines += ["", f"score: {r['musicxml']} ({r['bars']} bars, {r['parts']} parts)",
               f"musescore: {r['mscz']}" if r["mscz"] else
               "musescore: not written (MuseScore 4 is not installed, or it could not read the score)",
               f"side-by-side viewer (open in a browser): {r['viewer']}",
               *(f"warning: {w}" for w in r["warnings"]),
-              "Lyrics are not read. Check the result with source_pages and render before calling it good."]
+              "Chord symbols are read where printed; lyrics are not. Check the result with source_pages and "
+              "render before calling it good."]
     return "\n".join(lines)
 
 

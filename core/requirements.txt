@@ -2,3 +2,5 @@ numpy
 pillow
 typer
 huggingface_hub
+pyobjc-framework-Vision; sys_platform == "darwin"
+pyobjc-framework-Quartz; sys_platform == "darwin"

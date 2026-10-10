@@ -52,14 +52,18 @@ decomposer convert <files in order> --title "Title" --composer "Name" --parts "S
 - The result is `<title>.musicxml` and `<title>.mscz`, in the folder of the first input unless `--out` says
   otherwise. `--name` sets the file name when it should differ from the title.
 - An image wider than it is tall is cut into two facing pages. Pass `--no-split` for a single landscape page.
+- Chord symbols printed above the staves ("Dm7", "G/B") are read and written into the score. Pass `--no-chords`
+  to leave them out.
 - About 6 seconds a page, the first one longer. Pages are cached: converting again, or with other options, is
   instant.
 
-It prints one line per page - systems, bars, parts - and then any warnings. Read them:
+It prints one line per page - systems, bars, parts, chord symbols - and then any warnings. Read them:
 
 - Bars per page should look like the source. A page with about twice the bars of its neighbours has had a
   system split in two; a page with far fewer has lost one.
 - Every page should have the same number of parts. A warning names the pages that differ.
+- If the source has chord symbols, every page that shows them should report some. A page with none, or far
+  fewer than its neighbours, has had a line missed.
 
 ## 4. Check the result
 
@@ -73,7 +77,8 @@ prints one image per page of the engraved result; page N is page N of the source
 "page images" folder `convert` printed. Read one source page and its rendered page together and compare bar by
 bar. Check at least the first page, one page from the middle, and every page a warning named. Look for: the
 clef and key at the start, parts on the right staves (a piano introduction in the piano, not in the voices),
-the same number of bars per system, and then the notes of a few bars.
+the same number of bars per system, the notes of a few bars, and, where the source has chord symbols, that each
+one is there, spelled the same, over the same beat.
 
 ## 5. Report
 
@@ -81,7 +86,8 @@ Tell the user, briefly:
 
 - where the `.musicxml` and `.mscz` files are;
 - which pages you compared and what you found, including errors - name the bars;
-- that **lyrics are not transcribed**, if the music has any, and that chord symbols and fingering are not either;
+- that **lyrics are not transcribed**, if the music has any, and that fingering is not either;
+- how many chord symbols were read, if any, and any you saw missing or misplaced;
 - any warnings, in plain words.
 
 Offer to open the score in MuseScore (`open "<file>.mscz"`) or the side-by-side viewer in the browser

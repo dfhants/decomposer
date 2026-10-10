@@ -39,7 +39,9 @@ are rebuilt on the next run. Needs macOS, `uv`, `git` and poppler; MuseScore 4 f
 
 ## What it does beyond copista
 
-- Cuts two-page spreads apart and joins the pages into one score.
+- Cuts two-page spreads apart, turns sideways PDF pages upright, and joins the pages into one score.
+- Reads chord symbols ("Dm7", "G/B", "F(sus2)") with macOS's built-in text recognition and writes them over the
+  beat they stand on.
 - Three patches to copista's layout (`patches/copisteria.patch`) for choral scores: a faint system line counts as
   one, half-systems are joined when the page's other systems show they belong together, and a system with hidden
   staves is lined up by its brace instead of from the top.

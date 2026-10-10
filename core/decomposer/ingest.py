@@ -57,7 +57,7 @@ def expand(inputs: list[Path]) -> list[Path]:
 
 def workdir(files: list[Path], split: bool = True) -> Path:
     """The cache folder for these files: the same files in the same order always give the same folder."""
-    h = hashlib.sha256(b"split" if split else b"whole")
+    h = hashlib.sha256(b"2 split" if split else b"2 whole")       # the number: raise when pages are cut differently
     for p in files:
         h.update(p.read_bytes())
     d = CACHE / h.hexdigest()[:16]
@@ -107,9 +107,18 @@ def pages(files: list[Path], work: Path, split: bool = True) -> list[Page]:
         ext = src.suffix.lower()
         if ext == ".pdf":
             from copisteria.vision.page.scan import from_pdf
-            info = subprocess.run(["pdfinfo", str(src)], capture_output=True, text=True, check=True).stdout
+            info = subprocess.run(["pdfinfo", "-f", "1", "-l", "100000", str(src)], capture_output=True, text=True,
+                                  check=True).stdout
             count = int(re.search(r"^Pages:\s+(\d+)", info, re.M).group(1))
-            out += [_page(from_pdf(src, n, work).path, f"{src.name} p.{n}") for n in range(1, count + 1)]
+            turned = {int(n): int(r) for n, r in re.findall(r"^Page\s+(\d+) rot:\s+(\d+)", info, re.M)}
+            for n in range(1, count + 1):
+                png = from_pdf(src, n, work).path
+                # a scan stored sideways is shown upright by the PDF's rotation, which the extracted image lacks
+                if turned.get(n, 0) % 360:
+                    with Image.open(png) as im:
+                        upright = im.rotate(-turned[n], expand=True, fillcolor=255)
+                    upright.save(png)
+                out.append(_page(png, f"{src.name} p.{n}"))
         elif ext in IMAGES:
             with Image.open(src) as im:
                 im = im.convert("L")

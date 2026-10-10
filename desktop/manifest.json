@@ -4,7 +4,7 @@
   "display_name": "Decomposer",
   "version": "0.3.0",
   "description": "Turn sheet music PDFs, scans and screenshots into editable MusicXML and MuseScore files, on your own computer.",
-  "long_description": "Give Claude the path of a score - a PDF, scanned pages, or a folder of images - and it reads the music into an editable score: MusicXML, and a MuseScore file when MuseScore 4 is installed. Claude checks the page order and resolution first, and compares the result with the source afterwards. The reading is done on your computer by the copista OMR model (KobiMusic); the first use downloads about 125 MB of model weights and a Python environment of about 1 GB. Needs macOS with uv, git and poppler installed. Lyrics are not transcribed.",
+  "long_description": "Give Claude the path of a score - a PDF, scanned pages, or a folder of images - and it reads the music into an editable score: MusicXML, and a MuseScore file when MuseScore 4 is installed. Claude checks the page order and resolution first, and compares the result with the source afterwards. The reading is done on your computer by the copista OMR model (KobiMusic); the first use downloads about 125 MB of model weights and a Python environment of about 1 GB. Needs macOS with uv, git and poppler installed. Chord symbols are read; lyrics are not.",
   "author": {
     "name": "dfhants",
     "url": "https://github.com/dfhants"

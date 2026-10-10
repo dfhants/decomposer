@@ -16,8 +16,9 @@ from typing import Annotated, Optional
 
 import typer
 
+from . import chords as chord_symbols
 from . import export, ingest
-from .engine import Copista
+from .engine import Copista, clean
 from .stitch import stitch
 
 app = typer.Typer(add_completion=False, no_args_is_help=True, pretty_exceptions_enable=False)
@@ -101,6 +102,7 @@ def convert(
     parts: Annotated[Optional[str], typer.Option(help='Part names from the top staff down, e.g. "Soprano/Alto,Tenor/Bass,Piano"')] = None,
     detector: Annotated[str, typer.Option(help="28m (more accurate) or 2m (faster)")] = "28m",
     split: Split = True,
+    chords: Annotated[bool, typer.Option(help="Read the chord symbols printed above the staves")] = True,
     budget: Annotated[Optional[float], typer.Option(help="Stop reading new pages after this many seconds; run again to go on (pages read are kept)")] = None,
     as_json: Json = False,
 ) -> None:
@@ -124,15 +126,24 @@ def convert(
             raise typer.Exit(3)
         xml = engine.read(Path(page.path), reads)
         s = engine.summary(xml)
-        read.append((page, xml, s))
+        text, s["chords"] = xml.read_text(), 0
+        if chords and s["parts"]:
+            layout = engine.layout(xml)
+            try:
+                found = chord_symbols.read(Path(page.path), xml, layout)
+            except ImportError:                 # the text recognition is macOS's own
+                found, chords = [], False
+                warnings.append("chord symbols were not read: text recognition needs macOS")
+            text, s["chords"] = chord_symbols.attach(text, found, layout)
+        read.append((page, xml, s, clean(text)))
         event(as_json, {"event": "page", "page": n, "of": len(pages), "source": page.source, **s},
               f"page {n}/{len(pages)}  {page.source.ljust(wide)}  {s['systems']} systems  {s['bars']} bars  "
-              f"{s['parts']} parts")
+              f"{s['parts']} parts" + (f"  {s['chords']} chord symbols" if s["chords"] else ""))
 
-    counts = [s["parts"] for _, _, s in read if s["parts"]]
+    counts = [s["parts"] for _, _, s, _ in read if s["parts"]]
     usual = max(set(counts), key=counts.count) if counts else 0
-    empty = [str(n) for n, (_, _, s) in enumerate(read, 1) if not s["bars"]]
-    odd = [f"{n} ({s['parts']})" for n, (_, _, s) in enumerate(read, 1) if s["parts"] and s["parts"] != usual]
+    empty = [str(n) for n, (_, _, s, _) in enumerate(read, 1) if not s["bars"]]
+    odd = [f"{n} ({s['parts']})" for n, (_, _, s, _) in enumerate(read, 1) if s["parts"] and s["parts"] != usual]
     if empty:
         warnings.append(f"no music read on page {', '.join(empty)}")
     if odd:
@@ -150,25 +161,26 @@ def convert(
 
     out.mkdir(parents=True, exist_ok=True)
     score = out / f"{name}.musicxml"
-    text = stitch([xml.read_text() for _, xml, s in read if s["parts"]], title=title, composer=composer,
+    text = stitch([page_xml for _, _, s, page_xml in read if s["parts"]], title=title, composer=composer,
                   part_names=names)
     score.write_text(text)
     mscz = export.mscz(score)
     viewer = reads / "index.html"
     shutil.copy(Path(__file__).with_name("viewer.html"), viewer)
-    (reads / "pages.js").write_text("const PAGES = " + json.dumps([xml.with_suffix(".html").name for _, xml, _ in read]))
+    (reads / "pages.js").write_text("const PAGES = " + json.dumps([xml.with_suffix(".html").name for _, xml, _, _ in read]))
 
     bars = text.count("<measure ") // total
-    lines = ["", f"score: {score}  ({bars} bars, {total} parts)",
+    symbols = sum(s["chords"] for _, _, s, _ in read)
+    lines = ["", f"score: {score}  ({bars} bars, {total} parts" + (f", {symbols} chord symbols)" if symbols else ")"),
              f"musescore: {mscz}" if mscz else
              "musescore: not written (MuseScore 4 is not installed, or it could not read the score)",
              f"viewer: {viewer}",
              f"page images: {Path(pages[0].path).parent}/  ({Path(pages[0].path).name} ...)",
              *(f"warning: {w}" for w in warnings),
-             f'Lyrics are not read. To check the result, run: decomposer render "{score}"']
+             f'Chord symbols are read where printed; lyrics are not. To check the result, run: decomposer render "{score}"']
     event(as_json, {"event": "result", "musicxml": str(score), "mscz": str(mscz) if mscz else None,
-                    "viewer": str(viewer), "bars": bars, "parts": total, "warnings": warnings,
-                    "pages": [{**d, **s} for d, (_, _, s) in zip(_describe(pages), read)]}, "\n".join(lines))
+                    "viewer": str(viewer), "bars": bars, "parts": total, "chords": symbols, "warnings": warnings,
+                    "pages": [{**d, **s} for d, (_, _, s, _) in zip(_describe(pages), read)]}, "\n".join(lines))
 
 
 @app.command()
