@@ -12,5 +12,6 @@
     "musicxml",
     "musescore",
     "sheet-music"
-  ]
+  ],
+  "repository": "https://github.com/dfhants/decomposer"
 }

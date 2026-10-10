@@ -6,7 +6,7 @@ Turns sheet music (PDFs, scans, screenshots) into editable MusicXML and MuseScor
 ## Use it from Claude Code
 
 ```
-claude plugin marketplace add ~/Development/decomposer
+claude plugin marketplace add dfhants/decomposer
 claude plugin install decomposer@decomposer
 ```
 
